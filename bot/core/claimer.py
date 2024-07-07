@@ -186,7 +186,7 @@ class Claimer:
             response = await http_client.post('https://api.mmbump.pro/v1/farming/finish', json={'tapCount': taps})
             response.raise_for_status()
 
-            resp = await response.json()
+            response_json = await response.json()
 
             return response_json
         except Exception as error:
