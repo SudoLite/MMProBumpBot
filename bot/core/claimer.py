@@ -72,12 +72,12 @@ class Claimer:
 
     async def login(self, http_client: aiohttp.ClientSession, tg_web_data: str) -> dict[str]:
         try:
-            response = await http_client.post('https://api.mmbump.pro/v1/login', json={'initData': tg_web_data})
+            response = await http_client.post('https://api.mmbump.pro/v1/loginJwt', json={'initData': tg_web_data})
             response.raise_for_status()
 
             response_json = await response.json()
 
-            return response_json['token']
+            return response_json['access_token']
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error}")
             await asyncio.sleep(delay=3)
@@ -228,12 +228,11 @@ class Claimer:
                         tg_web_data = await self.get_tg_web_data(proxy=proxy)
                         access_token = await self.login(http_client=http_client, tg_web_data=tg_web_data)
 
-                        http_client.headers["Authorization"] = access_token
+                        http_client.headers["Authorization"] = f"Bearer {access_token}"
 
                         access_token_created_time = time()
 
                         farming_data = await self.get_farming_data(http_client=http_client)
-                        logger.info(f"{self.session_name} | Balance: <e>{farming_data['balance']}</e>")
 
                         day_grant_first = farming_data['day_grant_first']
                         day_grant_day = farming_data['day_grant_day']
