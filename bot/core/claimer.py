@@ -224,7 +224,7 @@ class Claimer:
 
             while True:
                 try:
-                    if time() - access_token_created_time >= 3600:
+                    if time() - access_token_created_time >= 1800:
                         tg_web_data = await self.get_tg_web_data(proxy=proxy)
                         access_token = await self.login(http_client=http_client, tg_web_data=tg_web_data)
 
