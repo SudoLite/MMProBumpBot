@@ -34,7 +34,7 @@ class Claimer:
         current_time = time()
 
         encoded_params = [
-            f"{key}={urllib.parse.quote(str(value))}"
+            f"{key}={quote(str(value))}"
             for item in data
             for key, value in item.items()
         ]
