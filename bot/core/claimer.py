@@ -1,7 +1,9 @@
 import asyncio
+import hmac
+import hashlib
 from time import time
 from datetime import datetime
-from urllib.parse import unquote
+from urllib.parse import unquote, quote
 from datetime import timedelta
 from random import randint
 
@@ -22,6 +24,26 @@ class Claimer:
     def __init__(self, tg_client: Client):
         self.session_name = tg_client.name
         self.tg_client = tg_client
+        self.user_id = 0
+
+    def create_hash(self, data=None):
+        if data is None:
+            data = []
+
+        secret_key = "super-key"
+        current_time = time()
+
+        encoded_params = [
+            f"{key}={urllib.parse.quote(str(value))}"
+            for item in data
+            for key, value in item.items()
+        ]
+
+        joined_params = "&".join(encoded_params)
+        time_param = f"time={int(current_time // 60)}"
+        final_string = f"{joined_params}&{time_param}" if joined_params else time_param
+
+        return hmac.new(secret_key.encode(), final_string.encode(), hashlib.sha256).hexdigest()
 
     async def get_tg_web_data(self, proxy: str | None) -> str:
         if proxy:
@@ -58,6 +80,8 @@ class Claimer:
                 string=unquote(
                     string=auth_url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0]))
 
+            self.user_id = (await self.tg_client.get_me()).id
+
             if self.tg_client.is_connected:
                 await self.tg_client.disconnect()
 
@@ -84,7 +108,7 @@ class Claimer:
 
     async def get_farming_data(self, http_client: aiohttp.ClientSession) -> dict[str]:
         try:
-            response = await http_client.get('https://api.mmbump.pro/v1/farming')
+            response = await http_client.post('https://api.mmbump.pro/v1/farming')
             response.raise_for_status()
 
             response_json = await response.json()
@@ -96,7 +120,9 @@ class Claimer:
 
     async def buy_boost(self, http_client: aiohttp.ClientSession) -> dict[str]:
         try:
-            response = await http_client.post('https://api.mmbump.pro/v1/product-list/buy', json={'id': settings.DEFAULT_BOOST})
+            data = {'id': settings.DEFAULT_BOOST}
+            data['hash'] = self.create_hash([data])
+            response = await http_client.post('https://api.mmbump.pro/v1/product-list/buy', json=data)
             response.raise_for_status()
 
             response_json = await response.json()
@@ -108,7 +134,9 @@ class Claimer:
 
     async def claim_daily(self, http_client: aiohttp.ClientSession) -> dict[str]:
         try:
-            response = await http_client.post('https://api.mmbump.pro/v1/grant-day/claim', json={})
+            data = {}
+            data['hash'] = self.create_hash([])
+            response = await http_client.post('https://api.mmbump.pro/v1/grant-day/claim', json=data)
             response.raise_for_status()
 
             response_json = await response.json()
@@ -120,7 +148,9 @@ class Claimer:
 
     async def reset_daily(self, http_client: aiohttp.ClientSession) -> None:
         try:
-            response = await http_client.post('https://api.mmbump.pro/v1/grant-day/reset', json={})
+            data = {}
+            data['hash'] = self.create_hash([])
+            response = await http_client.post('https://api.mmbump.pro/v1/grant-day/reset', json=data)
             response.raise_for_status()
 
             response_json = await response.json()
@@ -132,7 +162,9 @@ class Claimer:
 
     async def get_tasks_list(self, http_client: aiohttp.ClientSession) -> dict[str]:
         try:
-            response = await http_client.get('https://api.mmbump.pro/v1/task-list')
+            data = {}
+            data['hash'] = self.create_hash([])
+            response = await http_client.post('https://api.mmbump.pro/v1/task-list', json=data)
             response.raise_for_status()
 
             response_json = await response.json()
@@ -144,7 +176,9 @@ class Claimer:
 
     async def task_complete(self, http_client: aiohttp.ClientSession, task_id: str) -> str:
         try:
-            response = await http_client.post('https://api.mmbump.pro/v1/task-list/complete', json={'id': task_id})
+            data = {'id': task_id}
+            data['hash'] = self.create_hash([data])
+            response = await http_client.post('https://api.mmbump.pro/v1/task-list/complete', json=data)
             response.raise_for_status()
 
             response_json = await response.json()
@@ -156,7 +190,9 @@ class Claimer:
 
     async def start_farm(self, http_client: aiohttp.ClientSession, balance: int) -> None:
         try:
-            response = await http_client.post('https://api.mmbump.pro/v1/farming/start', json={'status': "inProgress"})
+            data = {'status': "inProgress"}
+            data['hash'] = self.create_hash([data])
+            response = await http_client.post('https://api.mmbump.pro/v1/farming/start', json=data)
             response.raise_for_status()
 
             resp = await response.json()
@@ -168,9 +204,9 @@ class Claimer:
                 
                 if settings.AUTO_CLAIM_MOON_BOUNS:
                     await asyncio.sleep(delay=randint(10, 25))
-                    balance += settings.BASE_MOON_BOUNS
-                    resp = await self.moon_claim(http_client=http_client, balance=balance)
+                    resp = await self.moon_claim(http_client=http_client)
                     if resp['balance']:
+                        balance = resp['balance']
                         logger.success(f"{self.session_name} | Successful Moon bonus claimed | "
                                 f"Balance: <e>{balance}</e> (<c>+{settings.BASE_MOON_BOUNS}</c>)")
             else:
@@ -183,7 +219,9 @@ class Claimer:
 
     async def finish_farm(self, http_client: aiohttp.ClientSession, taps: int) -> dict[str]:
         try:
-            response = await http_client.post('https://api.mmbump.pro/v1/farming/finish', json={'tapCount': taps})
+            data = {'tapCount': taps}
+            data['hash'] = self.create_hash([data])
+            response = await http_client.post('https://api.mmbump.pro/v1/farming/finish', json=data)
             response.raise_for_status()
 
             response_json = await response.json()
@@ -193,9 +231,11 @@ class Claimer:
             logger.error(f"{self.session_name} | Unknown error when Finishing farm: {error}")
             await asyncio.sleep(delay=3)
 
-    async def moon_claim(self, http_client: aiohttp.ClientSession, balance: int) -> dict[str]:
+    async def moon_claim(self, http_client: aiohttp.ClientSession) -> dict[str]:
         try:
-            response = await http_client.post('https://api.mmbump.pro/v1/farming/moon-claim', json={'balance': balance})
+            data = {}
+            data['hash'] = self.create_hash([])
+            response = await http_client.post('https://api.mmbump.pro/v1/farming/moon-claim', json=data)
             response.raise_for_status()
 
             response_json = await response.json()
@@ -229,6 +269,7 @@ class Claimer:
                         access_token = await self.login(http_client=http_client, tg_web_data=tg_web_data)
 
                         http_client.headers["Authorization"] = f"Bearer {access_token}"
+                        http_client.headers["User_auth"] = str(self.user_id)
 
                         access_token_created_time = time()
 
